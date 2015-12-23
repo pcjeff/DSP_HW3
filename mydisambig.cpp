@@ -9,8 +9,6 @@
 #include "Ngram.h"
 #define ngram_order 2
 using namespace std;
-const char lm_filename[] = "./bigram.lm";
-clock_t start, end;
 Vocab voc;
 Ngram lm( voc, ngram_order );
 
@@ -126,18 +124,19 @@ void Veterbi(string sentence, map<string, vector<string> > mapping_list)
                     prob = max_prop;
         prob += getBigramProb("", Words[i].c_str());
     }
+    cout << "<s> ";
     for(int i=0 ; i<Words.size() ; i++)
         cout << Words[i] << " ";
-    cout << endl;
+    cout << " </s>" << endl;
 }
 
 int main(int argc, char *argv[])
 {
-
+    char* lm_filename = argv[2];
     File lmFile(lm_filename, "r");
     lm.read(lmFile);
     lmFile.close();
-    vector<string> lines = ReadInputFile("../testdata_sep/1.txt");
+    vector<string> lines = ReadInputFile(argv[1]);
     map<string, vector<string> > mapping_list = ReadMappingFile("./ZhuYin-Big5.map");
     for(int i=0 ; i<lines.size() ; i++)
         Veterbi(lines[i], mapping_list);
