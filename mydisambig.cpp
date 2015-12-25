@@ -11,10 +11,16 @@
 using namespace std;
 Vocab voc;
 Ngram lm( voc, ngram_order );
+typedef struct VNode{
+    string word;
+    double prob;
+    int prev; //prev connected node index
+} VNode;
+VNode **Vtable=NULL;
 
 vector<string> split(string &str) 
 {
-    string buf;
+    string buf, _;
     vector<std::string> tokens;
     istringstream iss(str);
     int i =0;
@@ -82,52 +88,89 @@ double getBigramProb(const char *w1, const char *w2)
     VocabIndex context[] = { wid1, Vocab_None };
     return lm.wordProb( wid2, context);
 }
+void PrintVtableSeq(int sentence_len)
+{
+    string strbuf = " </s>\n";
+    double prob=-1000, max_prop=-1000;
+    int maxProbindex = -1, PrevIndex = -10000;
+
+    for(int i=0 ; i<10000 ; i++)
+    {
+        if (Vtable[sentence_len-1][i].prob > max_prop)
+        {
+            max_prop = Vtable[sentence_len-1][i].prob;
+            PrevIndex = Vtable[sentence_len-1][i].prev;
+            maxProbindex = i;
+        }
+    }
+    strbuf = " " + Vtable[sentence_len-1][maxProbindex].word + strbuf;
+    for(int i=sentence_len-1 ; i>0 ; i--)
+    {
+        strbuf = " " + Vtable[i-1][PrevIndex].word + strbuf;
+        PrevIndex = Vtable[i-1][PrevIndex].prev;
+    }
+    strbuf = "<s> " + strbuf;
+    cout << strbuf << endl;
+}
 void Veterbi(string sentence, map<string, vector<string> > mapping_list)
 {
     vector<string> Words = split(sentence);
     vector <string> tokens;
+    string strbuf = "";
     double prob = -1000;
     double TransProb = -1000;
     double max_prop = -1000;
-    int maxWordIndex = -1;
+    int prevTokenMappingListLen = -1, curTokenMappingListLen= -1;
     prob = getBigramProb("", Words[0].c_str());
     tokens = mapping_list[ Words[0] ];
-    
-    for(int j=1 ; j<tokens.size() ; j++)
-    {
-        TransProb = getBigramProb(tokens[j].c_str(), Words[1].c_str());
-        if(TransProb + prob > max_prop)
+    //Viteribi tabe
+    Vtable = (VNode**)malloc(sizeof(VNode*)*Words.size());
+    for(int i=0 ; i<Words.size() ; i++)
+        Vtable[i] = (VNode*)malloc(sizeof(VNode)*10000);
+    for(int i=0 ; i<Words.size() ; i++)
+        for(int j=0 ; j<10000 ; j++)
         {
-            max_prop = TransProb + prob;
-            Words[0] = tokens[j];
+            Vtable[i][j].word = "<unk>";
+            Vtable[i][j].prob = -10000;
+            Vtable[i][j].prev = -10000;
+        }
+
+    prevTokenMappingListLen = tokens.size();
+    for(int j=0 ; j<tokens.size() ; j++)
+    {
+        TransProb = getBigramProb("<s>", tokens[j].c_str());
+        if(TransProb > max_prop)
+        {
+            max_prop = TransProb;
+            Vtable[0][j].prob = max_prop;
+            Vtable[0][j].word = tokens[j];
         }
     }
 
     for(int i=1 ; i<Words.size(); i++)
     {
         tokens = mapping_list[ Words[i] ];
-        TransProb = -1000;
-        max_prop = -1000;
-        maxWordIndex = -1;
-        //j starts from 1 due to struture of the map  key: (key value)
-        for(int j=1 ; j<tokens.size() ; j++)
+        curTokenMappingListLen = tokens.size();
+        for(int k=0 ; k<curTokenMappingListLen ; k++)
         {
-            TransProb = getBigramProb(Words[i-1].c_str(), tokens[j].c_str());
-
-            if(TransProb + prob > max_prop)
+            TransProb = -1000;
+            max_prop = -1000;
+            for(int j=0 ; j<prevTokenMappingListLen ; j++)
             {
-                max_prop = TransProb + prob;
-                Words[i] = tokens[j];
+                TransProb = getBigramProb(Vtable[i-1][j].word.c_str(), tokens[k].c_str());
+
+                if(TransProb + Vtable[i-1][j].prob > max_prop)
+                {
+                    max_prop = TransProb + Vtable[i-1][j].prob;
+                    Vtable[i][k].word = tokens[k];
+                    Vtable[i][k].prob = max_prop + getBigramProb("", Words[i].c_str());
+                    Vtable[i][k].prev = j;
+                }
             }
         }
-        
-                    prob = max_prop;
-        prob += getBigramProb("", Words[i].c_str());
+        prevTokenMappingListLen = curTokenMappingListLen;
     }
-    cout << "<s> ";
-    for(int i=0 ; i<Words.size() ; i++)
-        cout << Words[i] << " ";
-    cout << " </s>" << endl;
+    PrintVtableSeq(Words.size());
 }
 
 int main(int argc, char *argv[])
